@@ -103,9 +103,9 @@ public class Server {
 
             // Process this packet
             String text = new String(data, "UTF-8").trim();
-            if (!text.isEmpty()) {
-                System.out.println(Integer.toHexString(sessionId) + " [" + seqNum + "] " + text);
-            }
+            
+            System.out.println(Integer.toHexString(sessionId) + " [" + seqNum + "] " + text);
+            
 
             updateClock(logicalClock);
             sendMessage(CMD_ALIVE, expectedSeq, null);

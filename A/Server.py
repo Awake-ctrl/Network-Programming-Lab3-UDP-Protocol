@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import socket
 import select
 import struct
@@ -68,8 +69,8 @@ class Session:
             
         # Process this packet
         text = data.decode('utf-8', errors='ignore').strip()
-        if text:
-            print(f"{hex(self.session_id)} [{seq_num}] {text}")
+        
+        print(f"{hex(self.session_id)} [{seq_num}] {text}")
             
         self.update_clock(logical_clock)
         self.send_message(CMD_ALIVE, self.expected_seq)

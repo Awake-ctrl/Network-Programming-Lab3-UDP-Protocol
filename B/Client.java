@@ -109,7 +109,7 @@ public class Client {
     }
 
     private void processInputLine(String line) throws Exception {
-        if (line == null || line.trim().isEmpty()) {
+        if (line == null ) {
             return;
         }
 
@@ -168,96 +168,139 @@ public class Client {
         System.out.println("eof");
     }
 
-    public void run() throws Exception {
-        try {
-            // Send HELLO to initiate session
-            state = "WAIT_HELLO";
-            sendMessage(CMD_HELLO, null);
-            System.out.println("Session started: " + Integer.toHexString(sessionId));
+public void run() throws Exception {
+    try {
+        // Send HELLO to initiate session
+        state = "WAIT_HELLO";
+        sendMessage(CMD_HELLO, null);
+        // System.out.println("Session started: " + Integer.toHexString(sessionId));
 
-            Scanner scanner = new Scanner(System.in);
-            Selector selector = Selector.open();
-            channel.register(selector, SelectionKey.OP_READ);
+        Scanner scanner = new Scanner(System.in);
+        Selector selector = Selector.open();
+        channel.register(selector, SelectionKey.OP_READ);
 
-            long startTime = System.currentTimeMillis();
-            long lastActivityTime = System.currentTimeMillis();
+        long startTime = System.currentTimeMillis();
+        long lastActivityTime = System.currentTimeMillis();
+        
+        // Wait for HELLO response from server before processing any input
+        boolean helloAcknowledged = false;
+        long helloWaitStart = System.currentTimeMillis();
+        
+        while (!helloAcknowledged && running) {
+            // Check timeout for HELLO response
+            if (System.currentTimeMillis() - helloWaitStart > timeout) {
+                System.out.println("Timeout waiting for server response");
+                shouldSendGoodbye = false;
+                running = false;
+                break;
+            }
+            
+            // Check for network activity
+            if (selector.select(100) > 0) {
+                for (SelectionKey key : selector.selectedKeys()) {
+                    if (key.isReadable()) {
+                        ByteBuffer buffer = ByteBuffer.allocate(1024);
+                        SocketAddress sender = channel.receive(buffer);
+                        if (sender != null) {
+                            buffer.flip();
+                            lastActivityTime = System.currentTimeMillis();
 
-            while (running) {
-                // Check timeout for pending acknowledgements
-                if (pendingAck && System.currentTimeMillis() - lastSentTime > timeout) {
-                    System.out.println("Timeout, no response from server");
-                    shouldSendGoodbye = false; // Don't try to send GOODBYE if server isn't responding
-                    break;
-                }
+                            Object[] result = parseMessage(buffer);
+                            if (result == null) continue;
 
-                // Check for user input
-                if (scanner.hasNextLine()) {
-                    String line = scanner.nextLine().trim();
-                    lastActivityTime = System.currentTimeMillis();
-                    processInputLine(line);
-                }
+                            byte command = (Byte) result[0];
+                            int seqNum = (Integer) result[1];
+                            long logicalClock = (Long) result[2];
+                            long timestamp = (Long) result[3];
 
-                // Check for network activity
-                if (selector.select(100) > 0) {
-                    for (SelectionKey key : selector.selectedKeys()) {
-                        if (key.isReadable()) {
-                            ByteBuffer buffer = ByteBuffer.allocate(1024);
-                            SocketAddress sender = channel.receive(buffer);
-                            if (sender != null) {
-                                buffer.flip();
-                                lastActivityTime = System.currentTimeMillis();
+                            pendingAck = false;
+                            updateClock(logicalClock);
 
-                                Object[] result = parseMessage(buffer);
-                                if (result == null)
-                                    continue;
-
-                                byte command = (Byte) result[0];
-                                int seqNum = (Integer) result[1];
-                                long logicalClock = (Long) result[2];
-                                long timestamp = (Long) result[3];
-
-                                pendingAck = false;
-                                updateClock(logicalClock);
-
-                                if (command == CMD_HELLO && state.equals("WAIT_HELLO")) {
-                                    state = "READY";
-                                    // System.out.println("Connected to server");
-                                } else if (command == CMD_ALIVE && state.equals("WAIT_ALIVE")) {
-                                    state = "READY";
-                                    long latency = System.currentTimeMillis() - timestamp;
-                                    // System.out.println("ALIVE received, latency: " + latency + "ms");
-                                } else if (command == CMD_GOODBYE) {
-                                    // System.out.println("Server sent GOODBYE");
-                                    shouldSendGoodbye = false; // Server already closed session
-                                    running = false;
-                                }
+                            if (command == CMD_HELLO && state.equals("WAIT_HELLO")) {
+                                state = "READY";
+                                helloAcknowledged = true;
+                                // System.out.println("Connected to server");
+                                break;
                             }
                         }
                     }
-                    selector.selectedKeys().clear();
                 }
+                selector.selectedKeys().clear();
+            }
+            
+            // Small sleep to prevent CPU spinning
+            Thread.sleep(10);
+        }
 
-                // If reading from file and no more input, check if we should exit
-                if (!isInteractive && !scanner.hasNextLine()) {
-                    // Wait a bit to receive any pending responses
-                    if (System.currentTimeMillis() - lastActivityTime > 1000 && !pendingAck) {
-                        break;
-                    }
-                }
-
-                // Small sleep to prevent CPU spinning
-                Thread.sleep(10);
+        // NOW process user input after connection is established
+        while (running) {
+            // Check timeout for pending acknowledgements
+            if (pendingAck && System.currentTimeMillis() - lastSentTime > timeout) {
+                System.out.println("Timeout, no response from server");
+                shouldSendGoodbye = false;
+                break;
             }
 
-            // Proper shutdown
-            shutdown();
+            // Check for user input - only now that we're connected
+            if (scanner.hasNextLine()) {
+                String line = scanner.nextLine().trim();
+                lastActivityTime = System.currentTimeMillis();
+                processInputLine(line);
+            }
 
-        } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
-            e.printStackTrace();
+            // Check for network activity
+            if (selector.select(100) > 0) {
+                for (SelectionKey key : selector.selectedKeys()) {
+                    if (key.isReadable()) {
+                        ByteBuffer buffer = ByteBuffer.allocate(1024);
+                        SocketAddress sender = channel.receive(buffer);
+                        if (sender != null) {
+                            buffer.flip();
+                            lastActivityTime = System.currentTimeMillis();
+
+                            Object[] result = parseMessage(buffer);
+                            if (result == null) continue;
+
+                            byte command = (Byte) result[0];
+                            int seqNum = (Integer) result[1];
+                            long logicalClock = (Long) result[2];
+                            long timestamp = (Long) result[3];
+
+                            pendingAck = false;
+                            updateClock(logicalClock);
+
+                            if (command == CMD_ALIVE && state.equals("WAIT_ALIVE")) {
+                                state = "READY";
+                                long latency = System.currentTimeMillis() - timestamp;
+                                // System.out.println("ALIVE received, latency: " + latency + "ms");
+                            } else if (command == CMD_GOODBYE) {
+                                // System.out.println("Server sent GOODBYE");
+                                shouldSendGoodbye = false;
+                                running = false;
+                            }
+                        }
+                    }
+                }
+                selector.selectedKeys().clear();
+            }
+
+            // If reading from file and no more input, check if we should exit
+            if (!isInteractive && !scanner.hasNextLine()) {
+                if (System.currentTimeMillis() - lastActivityTime > 1000 && !pendingAck) {
+                    break;
+                }
+            }
+
+            Thread.sleep(10);
         }
-    }
 
+        shutdown();
+
+    } catch (Exception e) {
+        System.err.println("Error: " + e.getMessage());
+        e.printStackTrace();
+    }
+}
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
             System.out.println("Usage: java Client <host> <port>");

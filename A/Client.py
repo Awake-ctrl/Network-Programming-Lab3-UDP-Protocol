@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import socket
 import threading
 import struct
@@ -116,7 +117,7 @@ class UDPClient:
         # Send HELLO to initiate session
         self.state = "WAIT_HELLO"
         self.send_message(CMD_HELLO)
-        print(f"Session started: {hex(self.session_id)}")
+        # print(f"Session started: {hex(self.session_id)}")
         
         
         # Main input loop
@@ -124,14 +125,25 @@ class UDPClient:
             while self.running:
                 if self.state == "READY":
                     line = sys.stdin.readline()
-                    if line==None or line.lower() == 'q' :
+                    
+                    # Check for EOF (end of file) - for file input redirection
+                    if not line:
                         break
+                        
+                    # Check for 'q' command - for console input
+                    if line.strip().lower() == 'q':
+                        break
+                        
+                    # Skip empty lines (optional)
+                    # if line.strip() == '':
+                    #     line=" "
+                       
                         
                     self.state = "WAIT_ALIVE"
                     self.send_message(CMD_DATA, line.encode('utf-8'))
                     # print(f"Sent: {line}")
                     
-        except KeyboardInterrupt:
+        except Exception as e:
             pass
             
             

@@ -19,6 +19,7 @@ Protocol Features:
 
 To Run:
 Linux/Mac: ./A/Client <host> <port> or ./B/Client <host> <port>
+Linux/Mac: ./B/Server <port> or ./A/Server<port>
 Windows: Use python/java commands directly on source files
 
 All four combinations tested and working.
