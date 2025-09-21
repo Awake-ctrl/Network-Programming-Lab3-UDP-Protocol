@@ -123,8 +123,8 @@ class UDPClient:
         try:
             while self.running:
                 if self.state == "READY":
-                    line = sys.stdin.readline().strip()
-                    if not line or line.lower() == 'q' :
+                    line = sys.stdin.readline()
+                    if line==None or line.lower() == 'q' :
                         break
                         
                     self.state = "WAIT_ALIVE"
