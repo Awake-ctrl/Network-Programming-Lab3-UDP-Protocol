@@ -79,20 +79,21 @@ class UDPClient:
                 if command == CMD_HELLO and self.state == "WAIT_HELLO":
                     self.state = "READY"
                     self.seq_num += 1
-                    print("Connected to server")
+                    # print("Connected to server")
                     
                 elif command == CMD_ALIVE and self.state == "WAIT_ALIVE":
                     self.state = "READY"
                     self.seq_num += 1
                     latency = time.time() * 1000 - timestamp
-                    print(f"ALIVE received, latency: {latency:.2f}ms")
+                    # print(f"ALIVE received, latency: {latency:.2f}ms")
                     
                 elif command == CMD_GOODBYE:
-                    print("Server sent GOODBYE")
+                    # print("Server sent GOODBYE")
                     self.running = False
                     
             except socket.timeout:
                 pass
+                
                 
     def check_timeout(self):
         while self.running:
@@ -117,20 +118,22 @@ class UDPClient:
         self.send_message(CMD_HELLO)
         print(f"Session started: {hex(self.session_id)}")
         
+        
         # Main input loop
         try:
             while self.running:
                 if self.state == "READY":
                     line = sys.stdin.readline().strip()
-                    if not line or line.lower() == 'q':
+                    if not line or line.lower() == 'q' :
                         break
                         
                     self.state = "WAIT_ALIVE"
                     self.send_message(CMD_DATA, line.encode('utf-8'))
-                    print(f"Sent: {line}")
+                    # print(f"Sent: {line}")
                     
         except KeyboardInterrupt:
             pass
+            
             
         # Send GOODBYE before exiting
         if self.running:
